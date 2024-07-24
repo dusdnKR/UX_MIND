@@ -331,7 +331,13 @@ def generate_images(openpose, pipe):
 
         pose_img = openpose(frame)
 
-        image_output = pipe(f"{focus_cmd} + ' ' + {emotion_cmd}, beautiful, highly insanely detailed, top quality, best quality, 4k, 8k, art single girl character, art like, very high quality", pose_img, negative_prompt="normal quality, low quality, worst quality, jpeg artifacts, chinese, username, watermark, signature, time signature, timestamp, artist name, copyright name, copyright, loli, child, infant, baby, bad anatomy, extra hands, extra legs, extra digits, extra_fingers, wrong finger, inaccurate limb, African American, African, tits, nipple, pubic hair", num_inference_steps=15).images[0]
+        image_output = pipe(f"{focus_cmd} + ' ' + {emotion_cmd},
+                            beautiful, highly insanely detailed, top quality, best quality, 4k, 8k, art single girl character, art like, very high quality",
+                            pose_img,
+                            negative_prompt="normal quality, low quality, worst quality, jpeg artifacts, chinese, username, watermark, signature, time signature,\
+                                            timestamp, artist name, copyright name, copyright, loli, child, infant, baby, bad anatomy, extra hands, extra legs, extra digits, \
+                                            extra_fingers, wrong finger, inaccurate limb, African American, African, tits, nipple, pubic hair",
+                            num_inference_steps=2).images[0]
         combined_img = np.concatenate((pose_img, image_output), axis=1)
         combined_pil_img = Image.fromarray(combined_img)
 
