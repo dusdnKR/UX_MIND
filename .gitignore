@@ -162,6 +162,7 @@ cython_debug/
 *.set
 *.joblib
 models/saved_model*
+models
 
 # Testing Code
 llm_test.ipynb
