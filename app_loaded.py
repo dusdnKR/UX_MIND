@@ -31,6 +31,9 @@ from pyqtgraph.Qt import QtCore, QtGui
 from typing import List
 from pylsl import StreamInlet, resolve_stream
 import warnings
+import os
+from utils.wrapper import StreamDiffusionWrapper
+import threading
 warnings.filterwarnings(action='ignore')
 
 # Flask 애플리케이션 생성
@@ -40,7 +43,7 @@ CORS(app)
 # 웹캠 비디오 캡처 객체 생성
 cap = cv2.VideoCapture(0)
 
-########################################🌟 MNE TOPOLOGY###################################
+########################################🌟 MNE TOPOLOGY ###################################
 
 # Generate MNE topomaps
 def generate_mne():
@@ -105,7 +108,7 @@ def mne_feed_model():
 def mne_feed():
     return render_template('mne_feed.html')
 
-########################################🌟 EEG PLOT###################################
+########################################🌟 EEG PLOT ###################################
 def load_eeg_data():
     mat_file = "./datas/s01.mat"
     mat = scipy.io.loadmat(mat_file)
@@ -175,7 +178,7 @@ def eeg_feed():
     return render_template("eeg_feed.html")
 
 
-########################################🌟 ATTENTION PLOT###################################
+########################################🌟 ATTENTION PLOT ###################################
 
 # Define constants
 CHANNEL_NAMES = ['AF3', 'F7', 'F3', 'FC5', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'FC6', 'F4', 'F8', 'AF4']
@@ -310,7 +313,7 @@ def attention_feed():
     return render_template('attention_feed.html')
 
 
-########################################🌟 DIFFUSION MODEL###################################
+########################################🌟 DIFFUSION MODEL ###################################
 cmd = "Character"
 
 def generate_images(openpose, pipe):
@@ -331,8 +334,7 @@ def generate_images(openpose, pipe):
 
         pose_img = openpose(frame)
 
-        image_output = pipe(f"{focus_cmd} + ' ' + {emotion_cmd},
-                            beautiful, highly insanely detailed, top quality, best quality, 4k, 8k, art single girl character, art like, very high quality",
+        image_output = pipe(f"{focus_cmd} + ' ' + {emotion_cmd}, beautiful, highly insanely detailed, top quality, best quality, 4k, 8k, art single girl character, art like, very high quality",
                             pose_img,
                             negative_prompt="normal quality, low quality, worst quality, jpeg artifacts, chinese, username, watermark, signature, time signature,\
                                             timestamp, artist name, copyright name, copyright, loli, child, infant, baby, bad anatomy, extra hands, extra legs, extra digits, \
@@ -371,19 +373,119 @@ def diffusion_feed():
     return render_template('diffusion_feed.html')
 
 
-########################################🌟 EMOTION RECOGNITION###################################
+########################################🌟 CAMERA THREAD ###################################
+
+cap = None  # 웹캠 캡처 객체
+
+def start_camera():
+    """웹캠 캡처를 별도의 스레드에서 실행"""
+    global cap
+    cap = cv2.VideoCapture(0)  # 웹캠 열기
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        return
+
+# 웹캠 캡처 스레드 시작
+camera_thread = threading.Thread(target=start_camera)
+camera_thread.daemon = True
+camera_thread.start()
+
+########################################🌟 STREAMDIFFUSION MODEL ###################################
+
+def generate_streamdiffusion_images(stream):
+    global diff_focus, diff_emotion
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Save frame to temporary file
+        temp_input_path = "temp_input.png"
+        cv2.imwrite(temp_input_path, frame)
+
+        # 사용자 상태 기반으로 prompt 생성 ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+        focus_cmd = "drowsy" if diff_focus in ["drowsy", "unfocus"] else "strongly focused"
+        emotion_cmd = diff_emotion if diff_emotion else "neutral"
+        if emotion_cmd in ["angry"]:
+            dynamic_prompt = f"{focus_cmd}, {emotion_cmd}, Portrait of The Joker halloween costume, {emotion_cmd} face painting, beautiful, highly insanely detailed, top quality, best quality, 4k, 8k, art single girl character, art like, very high quality"
+        elif emotion_cmd in ["disgust"]:
+            dynamic_prompt = f"{focus_cmd}, {emotion_cmd}, Portrait of The green {emotion_cmd} face costume, face painting, highly insanely detailed, top quality, best quality, 4k, 8k, art single {emotion_cmd} girl character, art like, very high quality"
+        elif emotion_cmd in ["fear"]:
+            dynamic_prompt = f"{focus_cmd}, {emotion_cmd}, Portrait of The Scream of Nature, face painting, highly insanely detailed, top quality, best quality, 4k, 8k, art single {emotion_cmd} girl character, art like, very high quality"
+        elif emotion_cmd in ["happy", "surprise", "neutral"]:
+            dynamic_prompt = f"{focus_cmd}, {emotion_cmd}, beautiful, highly insanely detailed, top quality, best quality, 4k, 8k, art single {emotion_cmd} girl character, art like, very high quality"
+        elif emotion_cmd in ["sad"]:
+            dynamic_prompt = f"{focus_cmd}, {emotion_cmd}, Portrait of the sad person, crying, blue, tears, beautiful, highly insanely detailed, top quality, best quality, 4k, 8k, art single {emotion_cmd} girl character, art like, very high quality"
+
+
+        # StreamDiffusionWrapper를 호출하여 결과 생성
+        output_image = stream(image=temp_input_path, prompt=dynamic_prompt)
+
+        # Convert PIL image to OpenCV format
+        output_image_cv = cv2.cvtColor(np.array(output_image), cv2.COLOR_RGB2BGR)
+
+        # Convert OpenCV image to JPEG
+        _, buffer = cv2.imencode('.jpg', output_image_cv)
+        frame = buffer.tobytes()
+
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+        # Clean up temporary file
+        if os.path.exists(temp_input_path):
+            os.remove(temp_input_path)
+
+@app.route('/streamdiffusion_feed_model', methods=['GET'])
+def streamdiffusion_feed_model():
+    global diff_focus, diff_emotion
+
+    # Prepare StreamDiffusionWrapper
+    stream = StreamDiffusionWrapper(
+        model_id_or_path="stabilityai/sd-turbo",
+        t_index_list=[27],
+        frame_buffer_size=1,
+        width=720,
+        height=480,
+        warmup=10,
+        acceleration="xformers",
+        mode="img2img",
+        use_denoising_batch=True,
+        cfg_type="self",
+        seed=123,
+    )
+    stream.prepare(
+        prompt="",
+        negative_prompt="normal quality, low quality, worst quality, jpeg artifacts, chinese, username, watermark, signature, time signature,\
+                         timestamp, artist name, copyright name, copyright, loli, child, infant, baby, bad anatomy, extra hands, extra legs, extra digits, \
+                         extra_fingers, wrong finger, inaccurate limb, African American, African, tits, nipple, pubic hair",
+        num_inference_steps=50,
+        guidance_scale=1.0,
+        delta=1.0,
+    )
+
+    if cap is None or not cap.isOpened():
+        return "Error: Could not open webcam."
+
+    return Response(generate_streamdiffusion_images(stream), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/streamdiffusion_feed')
+def streamdiffusion_feed():
+    return render_template('streamdiffusion_feed.html')
+
+########################################🌟 EMOTION RECOGNITION ###################################
+
 diff_emotion = "happy"
+emotions = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
 
 @app.route('/emotion_feed_model')
 def emotion_feed_model():
-    emotions = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
-
     def generate_emotion_data():
         global diff_emotion
         success = True
 
         while success:
-            success, frame = cap.read()                               
+            success, frame = cap.read()
             if success:
                 # Perform emotion analysis
                 predictions = DeepFace.analyze(frame, actions=['emotion'], detector_backend="opencv", enforce_detection=False, silent=True)
@@ -397,7 +499,7 @@ def emotion_feed_model():
                 # Create JSON data to send to the front-end
                 json_data = json.dumps({'emotions': emotions, 'probabilities': probabilities})
                 yield f"data:{json_data}\n\n"
-            
+
     response = Response(generate_emotion_data(), mimetype="text/event-stream")
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
@@ -407,38 +509,59 @@ def emotion_feed_model():
 def emotion_feed():
     return render_template('emotion_feed.html')
 
-########################################🌟 POSE ESTIMATION###################################
+########################################🌟 POSE ESTIMATION ###################################
 
-def generate_frames(faceCascade):
+# def generate_frames(faceCascade):
+#     while True:
+#         success, frame = cap.read()
+#         if success:
+#             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#             faces = faceCascade.detectMultiScale(gray, 1.1, 5)
+#             for (x,y,w,h) in faces:
+#                 cv2.rectangle(frame, (x,y), (x+w, y+h), (0,255,0), 4)
+
+#             # 프레임을 바이트로 변환하여 스트리밍
+#             ret, buffer = cv2.imencode('.jpg', frame)
+#             if ret:
+#                 frame_bytes = buffer.tobytes()
+#                 yield (b'--frame\r\n'
+#                     b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+# @app.route('/face_feed_model')
+# def face_feed_model():
+#     faceCascade = cv2.CascadeClassifier("./models/haarcascade_frontalface_alt.xml")
+
+#     response = Response(generate_frames(faceCascade), mimetype='multipart/x-mixed-replace; boundary=frame')
+#     response.headers["Cache-Control"] = "no-cache"
+#     response.headers["X-Accel-Buffering"] = "no"
+
+#     return response
+
+# @app.route('/face_feed')
+# def face_feed():
+#     return render_template('face_feed.html')
+
+########################################🌟 VIDEO ###################################
+
+def generate_frames():
     while True:
         success, frame = cap.read()
-        if success:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = faceCascade.detectMultiScale(gray, 1.1, 5)
-            for (x,y,w,h) in faces:
-                cv2.rectangle(frame, (x,y), (x+w, y+h), (0,255,0), 4)
-
-            # 프레임을 바이트로 변환하여 스트리밍
+        if not success:
+            break
+        else:
             ret, buffer = cv2.imencode('.jpg', frame)
-            if ret:
-                frame_bytes = buffer.tobytes()
-                yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            frame = buffer.tobytes()
+            
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-@app.route('/face_feed_model')
-def face_feed_model():
-    faceCascade = cv2.CascadeClassifier("./models/haarcascade_frontalface_alt.xml")
+@app.route('/video_feed')
+def video_feed_model():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-    response = Response(generate_frames(faceCascade), mimetype='multipart/x-mixed-replace; boundary=frame')
-    response.headers["Cache-Control"] = "no-cache"
-    response.headers["X-Accel-Buffering"] = "no"
-
-    return response
-
-@app.route('/face_feed')
-def face_feed():
-    return render_template('face_feed.html')
-
+@app.route('/video_feed')
+def video_feed():
+    return render_template('video_feed.html')
 
 ###########################################################################################
 

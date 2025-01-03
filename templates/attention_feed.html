@@ -48,7 +48,7 @@
                 datasets: [{
                     label: "Attention Status",
                     data: [2, 4, 6], // Initial data values
-                    value: 3,
+                    value: 5,
                     borderWidth: 0,
                     backgroundColor:  ["#FF87AB", "#FFD700", "#66FF66"],
                     borderWidth: 1
@@ -113,6 +113,7 @@
             } else {
                 attentionState = "Unknown";
             }
+            attentionChart.data.datasets[0].value = 5;
 
             attentionChart.update(); // Update the chart
         };
