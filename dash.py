@@ -124,39 +124,76 @@ cols = st.columns([1, 1])
 st.markdown(card_css, unsafe_allow_html=True)
 
 with cols[0].container():
+    # sub_cols_1 = st.columns([1, 1])
+
+    # with sub_cols_1[0].container():
+    #     st.markdown('''
+    #             <div class="card">
+    #                 <div class="card-content">\t</div>
+    #                 <iframe src="http://localhost:5000/face_feed" width="100%" height="485" frameborder="0" scrolling="no">
+    #                 </iframe>
+    #             </div>''', unsafe_allow_html=True)
+        
+    st.markdown('''
+            <div class="card">
+                <div class = "card-title" >
+                <div class="card-content">Emotion</div>
+                </div>
+                    <iframe src="http://localhost:5000/emotion_feed" width="100%" height="450" frameborder="0" scrolling="no">
+                    </iframe>
+            </div>''', unsafe_allow_html=True)
+    
+    # st.markdown('''
+    #     <div class="card">
+    #         <div class="card-title">
+    #             <div class="card-content">Transform into Character</div>
+    #             </select>
+    #         </div>
+    #         <iframe src="http://localhost:5000/streamdiffusion_feed" width="100%" height="450" frameborder="0" scrolling="no">
+    #         </iframe>
+    #     </div>
+    #     ''', unsafe_allow_html=True)
+
+    #### Two cols ####
     sub_cols_1 = st.columns([1, 1])
 
     with sub_cols_1[0].container():
         st.markdown('''
-                <div class="card">
-                    <div class="card-content">\t</div>
-                    <iframe src="http://localhost:5000/face_feed" width="100%" height="485" frameborder="0" scrolling="no">
-                    </iframe>
-                </div>''', unsafe_allow_html=True)
-        
-    with sub_cols_1[1].container():  
-        st.markdown('''
-                    
-                <div class="card">
-                    <div class = "card-title" >
-                    <div class="card-content">Emotion</div>
-                    </div>
-                        <iframe src="http://localhost:5000/emotion_feed" width="100%" height="450" frameborder="0" scrolling="no">
-                        </iframe>
-                </div>''', unsafe_allow_html=True)
-    
-    st.markdown('''
-        <div class="card">
-            <div class="card-title">
-                <div class="card-content">Transform into Character</div>
-                </select>
+            <div class="card">
+                <div class="card-title">
+                    <div class="card-content">Original Video</div>
+                    </select>
+                </div>
+                <iframe src="http://localhost:5000/video_feed" width="100%" height="450" frameborder="0" scrolling="no">
+                </iframe>
             </div>
-            <iframe src="http://localhost:5000/diffusion_feed" width="100%" height="450" frameborder="0" scrolling="no">
-            </iframe>
-        </div>
-        ''', unsafe_allow_html=True)
+            ''', unsafe_allow_html=True)
 
-    
+    with sub_cols_1[1].container():
+        st.markdown('''
+            <div class="card">
+                <div class="card-title">
+                    <div class="card-content">Transform into Character</div>
+                    </select>
+                </div>
+                <iframe src="http://localhost:5000/streamdiffusion_feed" width="100%" height="450" frameborder="0" scrolling="no">
+                </iframe>
+            </div>
+            ''', unsafe_allow_html=True)
+    #####################
+
+    # st.markdown('''
+    #     <div class="card" style="height: 540px; width: 100%;>
+    #         <div class="card-title" style="position: absolute; top: 20px; left: 20px; font-size: 20px;">
+    #             <div class="card-content">Transform into Character</div>
+    #         </div>
+    #         <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100vh;">
+    #             <iframe src="http://localhost:5000/video_feed" style="flex: 1; height: 150vh; margin-right: 10px;" frameborder="0" scrolling="no"></iframe>
+    #             <iframe src="http://localhost:5000/streamdiffusion_feed" style="flex: 1; height: 90vh; margin-left: 10px; position: relative; top: -1025px;" frameborder="0" scrolling="no"></iframe>
+    #         </div>
+    #     </div>
+    # ''', unsafe_allow_html=True)
+
 with cols[1].container():
     st.markdown('''
             <div class="card">
